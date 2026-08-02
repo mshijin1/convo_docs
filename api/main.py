@@ -17,12 +17,19 @@ from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 load_dotenv()
 
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2.5-Coder-7B-Instruct")
+SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+EMBEDDING_SERVER_URL = os.getenv("Embedding_Server_URL", "http://localhost:8080/embed")
+
 app = FastAPI(title="RAG Ingestion & Conversational Retrieval API")
 
 # --- CONFIGURATION & CONNECTIONS ---
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-EMBEDDING_SERVER_URL = "http://localhost:8080/embed"
+EMBEDDING_SERVER_URL = os.getenv("Embedding_Server_URL", "http://localhost:8080/embed")
 qdrant_client = QdrantClient(host="localhost", port=6333)
 COLLECTION_NAME = "pdf_documents"
 
@@ -33,8 +40,6 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 QUEUE_NAME = "pdf_ingestion_queue"
 
 # LLM Configuration (Hugging Face Inference)
-HF_TOKEN = os.getenv("HF_TOKEN", "")
-MODEL_ID = "Qwen/Qwen2.5-Coder-7B-Instruct"
 hf_client = InferenceClient(model=MODEL_ID, token=HF_TOKEN if HF_TOKEN else None)
 
 SIMILARITY_THRESHOLD = 0

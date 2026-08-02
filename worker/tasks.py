@@ -7,16 +7,25 @@ from pypdf import PdfReader
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct, Filter, FieldCondition, MatchValue
 from pymongo import MongoClient
+from dotenv import load_dotenv
+load_dotenv()
 
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+EMBEDDING_SERVER_URL = os.getenv("EMBEDDING_SERVER_URL", "http://localhost:8080/embed")
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:secretpassword@localhost:27017/")
 # Database Connections
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 QUEUE_NAME = "pdf_ingestion_queue"
-EMBEDDING_SERVER_URL = "http://localhost:8080/embed"
+EMBEDDING_SERVER_URL = os.getenv("EMBEDDING_SERVER_URL", "http://localhost:8080/embed")
 
-qdrant_client = QdrantClient(host="localhost", port=6333)
+
+qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 COLLECTION_NAME = "pdf_documents"
 
-mongo_client = MongoClient("mongodb://admin:secretpassword@localhost:27017/")
+mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["rag_db"]
 documents_collection = db["documents"]
 

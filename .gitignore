@@ -6,6 +6,8 @@ __pycache__/
 # Environment & Credentials
 api/.env
 .env
+worker/.env
+.env
 
 # Runtime / Local Storage
 temp_uploads/*
