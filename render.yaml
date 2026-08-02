@@ -1,5 +1,5 @@
 services:
-  # 1. FastAPI Web API
+  # 1. FastAPI Web API (Public Service)
   - type: web
     name: convodocs-api
     env: docker
@@ -8,12 +8,12 @@ services:
     envVars:
       - key: REDIS_HOST
         fromService:
-          type: redis
+          type: keyvalue
           name: redis-queue
           property: host
       - key: REDIS_PORT
         fromService:
-          type: redis
+          type: keyvalue
           name: redis-queue
           property: port
       - key: HF_TOKEN
@@ -34,7 +34,7 @@ services:
     envVars:
       - key: REDIS_HOST
         fromService:
-          type: redis
+          type: keyvalue
           name: redis-queue
           property: host
       - key: EMBEDDING_SERVER_URL
@@ -44,8 +44,8 @@ services:
       - key: MONGO_URI
         value: mongodb://admin:secretpassword@mongo-db:27017/
 
-  # 3. Qdrant Vector DB
-  - type: web
+  # 3. Qdrant Vector DB (Private Service)
+  - type: pserv
     name: qdrant-db
     env: image
     image:
@@ -56,8 +56,8 @@ services:
       mountPath: /qdrant/storage
       sizeGB: 10
 
-  # 4. MongoDB Database
-  - type: web
+  # 4. MongoDB Database (Private Service)
+  - type: pserv
     name: mongo-db
     env: image
     image:
@@ -73,8 +73,8 @@ services:
       mountPath: /data/db
       sizeGB: 10
 
-# 5. Managed Redis Queue
-  - type:keyvalue
+  # 5. Managed Redis / Key Value Queue
+  - type: keyvalue
     name: redis-queue
     plan: starter
     ipAllowList: []
