@@ -76,5 +76,5 @@ services:
   # 5. Managed Redis / Key Value Queue
   - type: keyvalue
     name: redis-queue
-    plan: starter
+    plan: free
     ipAllowList: []
