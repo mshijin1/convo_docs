@@ -4,7 +4,7 @@ services:
     name: convodocs-api
     env: docker
     dockerfilePath: ./api/Dockerfile
-    plan: starter
+    plan: free
     envVars:
       - key: REDIS_HOST
         fromService:
@@ -30,7 +30,7 @@ services:
     name: convodocs-worker
     env: docker
     dockerfilePath: ./worker/Dockerfile
-    plan: starter
+    plan: free
     envVars:
       - key: REDIS_HOST
         fromService:
@@ -51,10 +51,10 @@ services:
     image:
       url: docker.io/qdrant/qdrant:latest
     plan: starter
-    disk:
-      name: qdrant-data
-      mountPath: /qdrant/storage
-      sizeGB: 10
+    # disk:
+    #   name: qdrant-data
+    #   mountPath: /qdrant/storage
+    #   sizeGB: 10
 
   # 4. MongoDB Database (Private Service)
   - type: pserv
@@ -62,16 +62,16 @@ services:
     env: image
     image:
       url: docker.io/mongo:latest
-    plan: starter
+    plan: free
     envVars:
       - key: MONGO_INITDB_ROOT_USERNAME
         value: admin
       - key: MONGO_INITDB_ROOT_PASSWORD
         value: secretpassword
-    disk:
-      name: mongo-data
-      mountPath: /data/db
-      sizeGB: 10
+    # disk:
+    #   name: mongo-data
+    #   mountPath: /data/db
+    #   sizeGB: 10
 
   # 5. Managed Redis / Key Value Queue
   - type: keyvalue
