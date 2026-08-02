@@ -1,0 +1,14 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Environment & Credentials
+api/.env
+.env
+
+# Runtime / Local Storage
+temp_uploads/*
+!temp_uploads/.gitkeep
+data/mongo_data/
+data/qdrant_data/
