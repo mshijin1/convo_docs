@@ -1,0 +1,80 @@
+services:
+  # 1. FastAPI Web API
+  - type: web
+    name: convodocs-api
+    env: docker
+    dockerfilePath: ./api/Dockerfile
+    plan: starter
+    envVars:
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: redis-queue
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: redis-queue
+          property: port
+      - key: HF_TOKEN
+        sync: false
+      - key: MODEL_ID
+        sync: false
+      - key: SIMILARITY_THRESHOLD
+        sync: false
+      - key: EMBEDDING_SERVER_URL
+        sync: false
+
+  # 2. Background Processing Worker
+  - type: worker
+    name: convodocs-worker
+    env: docker
+    dockerfilePath: ./worker/Dockerfile
+    plan: starter
+    envVars:
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: redis-queue
+          property: host
+      - key: EMBEDDING_SERVER_URL
+        value: http://embedding-server:8080/embed
+      - key: QDRANT_HOST
+        value: qdrant-db
+      - key: MONGO_URI
+        value: mongodb://admin:secretpassword@mongo-db:27017/
+
+  # 3. Qdrant Vector DB
+  - type: web
+    name: qdrant-db
+    env: image
+    image:
+      url: docker.io/qdrant/qdrant:latest
+    plan: starter
+    disk:
+      name: qdrant-data
+      mountPath: /qdrant/storage
+      sizeGB: 10
+
+  # 4. MongoDB Database
+  - type: web
+    name: mongo-db
+    env: image
+    image:
+      url: docker.io/mongo:latest
+    plan: starter
+    envVars:
+      - key: MONGO_INITDB_ROOT_USERNAME
+        value: admin
+      - key: MONGO_INITDB_ROOT_PASSWORD
+        value: secretpassword
+    disk:
+      name: mongo-data
+      mountPath: /data/db
+      sizeGB: 10
+
+# 5. Managed Redis Queue
+redis:
+  - name: redis-queue
+    plan: starter
+    ipAllowList: []
