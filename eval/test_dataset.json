@@ -1,0 +1,10 @@
+[
+  {
+    "question": "What is the company policy on remote work equipment reimbursement?",
+    "contexts": [
+      "Employees are eligible for a one-time $500 stipend for home office equipment during their first 90 days."
+    ],
+    "answer": "You are eligible for a one-time $500 stipend for home office equipment within your first 90 days.",
+    "ground_truth": "New employees receive a $500 home office equipment stipend in their first 90 days."
+  }
+]
