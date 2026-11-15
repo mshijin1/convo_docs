@@ -10,3 +10,4 @@ qdrant-client
 pymongo
 huggingface_hub
 python-dotenv
+groq

@@ -88,7 +88,7 @@ def generate_embeddings(text_chunks: list[str], batch_size: int = 32) -> list[li
         batch = text_chunks[i:i + batch_size]
         payload = {"inputs": batch}
         try: 
-            response = requests.post(EMBEDDING_SERVER_URL, json=payload, timeout=30)
+            response = requests.post(EMBEDDING_SERVER_URL, json=payload, timeout=120)
             if response.status_code == 200:
                 all_embeddings.extend(response.json())
             else:
@@ -191,14 +191,14 @@ def start_worker():
                 # 2. Run automated purge sequence
                 purge_partial_data(job_id)
                 
-                        # --- ADD THIS CLEANUP STEP HERE ---
-            finally:
-                if file_path and os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                        print(f"[🧹] [File Cleanup] Removed temporary file: {file_path}")
-                    except Exception as clean_err:
-                        print(f"[!] [File Cleanup Warning] Could not remove {file_path}: {clean_err}")
+            #             # --- ADD THIS CLEANUP STEP HERE ---
+            # finally:
+            #     if file_path and os.path.exists(file_path):
+            #         try:
+            #             os.remove(file_path)
+            #             print(f"[🧹] [File Cleanup] Removed temporary file: {file_path}")
+            #         except Exception as clean_err:
+            #             print(f"[!] [File Cleanup Warning] Could not remove {file_path}: {clean_err}")
 
         except redis.ConnectionError:
             time.sleep(5)

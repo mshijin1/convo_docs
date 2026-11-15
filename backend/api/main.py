@@ -13,16 +13,18 @@ import redis
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
-from huggingface_hub import InferenceClient
+from groq import AsyncGroq
 from dotenv import load_dotenv
 load_dotenv()
 
-HF_TOKEN = os.getenv("HF_TOKEN", "")
+GROQ_API_KEY=os.getenv("GROQ_API_KEY")
+GROQ_CLIENT=AsyncGroq(api_key=GROQ_API_KEY)
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2.5-Coder-7B-Instruct")
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 EMBEDDING_SERVER_URL = os.getenv("Embedding_Server_URL", "http://localhost:8080/embed")
+UPLOAD_DIR = Path("C:\\Users\\ACER\\Documents\\RAG_APPLICATION\\convo_docs\\backend\\api\\temp_uploads")
 
 app = FastAPI(title="RAG Ingestion & Conversational Retrieval API")
 
@@ -33,14 +35,8 @@ EMBEDDING_SERVER_URL = os.getenv("Embedding_Server_URL", "http://localhost:8080/
 qdrant_client = QdrantClient(host="localhost", port=6333)
 COLLECTION_NAME = "pdf_documents"
 
-UPLOAD_DIR = Path("./temp_uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 QUEUE_NAME = "pdf_ingestion_queue"
-
-# LLM Configuration (Hugging Face Inference)
-hf_client = InferenceClient(model=MODEL_ID, token=HF_TOKEN if HF_TOKEN else None)
 
 SIMILARITY_THRESHOLD = 0
 GROUNDING_REFUSAL_MESSAGE = (
@@ -76,6 +72,8 @@ class QueryRequest(BaseModel):
 
 @app.post("/v1/document/upload", status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(file: UploadFile = File(...)):
+    
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     # 1. Validation
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(
@@ -240,14 +238,15 @@ def assemble_rag_prompt(query: str, context_chunks: list[dict]) -> list[dict]:
 async def stream_llm_response(prompt_messages: list[dict]) -> AsyncGenerator[str, None]:
     """Yields tokens from Hugging Face Inference API as Server-Sent Events (SSE)."""
     try:
-        stream = hf_client.chat_completion(
+        stream = await GROQ_CLIENT.chat.completions.create(
+            model=MODEL_ID,
             messages=prompt_messages,
             max_tokens=512,
             temperature=0.2,
             stream=True
         )
 
-        for chunk in stream:
+        async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 token_text = chunk.choices[0].delta.content
                 yield f"data: {json.dumps({'token': token_text})}\n\n"
@@ -255,7 +254,9 @@ async def stream_llm_response(prompt_messages: list[dict]) -> AsyncGenerator[str
         yield "data: [DONE]\n\n"
 
     except Exception as e:
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        # Optional: Print or log 'e' to your terminal so you can see the exact error next time!
+        print(f"Groq API Error: {str(e)}")
+        yield f"data: {json.dumps({'error': 'Failed during LLM response Generation.'})}\n\n, {str(e)}"
 
 
 @app.post("/v1/chat/completions")
@@ -290,44 +291,59 @@ async def chat_completion_stream(payload: QueryRequest):
     )
 
 
-# --- DIAGNOSTIC & TEST ENDPOINTS ---
-
-@app.post("/v1/chat/vectorize-test")
-async def test_query_vectorization(payload: QueryRequest):
-    vector = vectorize_query(payload.query)
-    return {
-        "job_id": payload.job_id,
-        "query": payload.query,
-        "vector_dimensions": len(vector),
-        "sample_vector_values": vector[:5]
-    }
-
-
-@app.post("/v1/chat/search-test")
-async def test_vector_search(payload: QueryRequest):
-    query_vector = vectorize_query(payload.query)
-
-    matches, pass_guardrail = retrieve_context_chunks(
-        job_id=payload.job_id,
-        query_vector=query_vector,
-        top_k=payload.top_k
+async def query_rag_system(job_id: str, question: str, k: int = 3) -> dict:
+    """
+    1. Vectorizes the question and retrieves chunks from Qdrant filtered by job_id.
+    2. Passes question + contexts to the Groq LLM.
+    3. Returns both the final answer and the source contexts used.
+    """
+    # 1. Vectorize the query
+    query_vector = vectorize_query(question)
+    
+    # 2. Retrieve chunks from Qdrant with job isolation (job_id filter)
+    job_filter = Filter(
+        must=[
+            FieldCondition(
+                key="job_id",
+                match=MatchValue(value=job_id)
+            )
+        ]
     )
 
-    if not pass_guardrail:
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "status": "REFUSED",
-                "reason": "Highest match score fell below threshold.",
-                "message": GROUNDING_REFUSAL_MESSAGE
-            }
-        )
-        
+    search_results = qdrant_client.query_points(
+        collection_name=COLLECTION_NAME,
+        query=query_vector,
+        query_filter=job_filter,
+        limit=k,
+        with_payload=True
+    )
+
+    # Extract text contexts (mimicking doc.page_content)
+    contexts = [point.payload.get("text", "") for point in search_results.points]
+
+    # Guardrail: If no contexts found, return refusal message
+    if not contexts:
+        return {
+            "answer": GROUNDING_REFUSAL_MESSAGE,
+            "contexts": []
+        }
+
+    # Format chunks for prompt assembly
+    chunk_dicts = [{"text": text, "score": 1.0} for text in contexts]
+    prompt_messages = assemble_rag_prompt(question, chunk_dicts)
+
+    # 3. Call Groq LLM (Non-streaming to get the full response string)
+    completion = await GROQ_CLIENT.chat.completions.create(
+        model=MODEL_ID,
+        messages=prompt_messages,
+        max_tokens=512,
+        temperature=0.2
+    )
+    
+    response = completion.choices[0].message.content
+
+    # 4. Return both the answer and the contexts used
     return {
-        "status": "PASSED",
-        "job_id": payload.job_id,
-        "query": payload.query,
-        "top_match_score": matches[0]["score"] if matches else 0,
-        "total_matches_found": len(matches),
-        "top_matches": matches
+        "answer": response,
+        "contexts": contexts
     }
